@@ -1,9 +1,7 @@
 # render.yaml — Render Blueprint (free tier)
 # Auto-creates: PostgreSQL, API web service, Celery worker, Celery beat,
 # and a keep-alive cron that pings /health every 10 min so the API never sleeps.
-#
-# BEFORE DEPLOY, replace the two CHANGE_ME values (Upstash Redis) and the two
-# URLs (your deployed services). Then: Render -> New -> Blueprint -> this repo.
+
 
 envVarGroups:
   - name: er-common
@@ -29,10 +27,11 @@ envVarGroups:
       - key: UPLOAD_DIR
         value: /data/uploads
 
+
 databases:
   - name: er-database
     plan: free
-    pgVersion: "16"
+
 
 services:
   # ---------------------------------------------------------------- API ----
@@ -47,13 +46,13 @@ services:
     preDeployCommand: alembic upgrade head
     startCommand: bash scripts/start_api.sh
     healthCheckPath: /health
-    envVarGroups:
-      - er-common
     envVars:
+      - fromGroup: er-common
       - key: DATABASE_URL
         fromDatabase:
           name: er-database
           property: connectionString
+
 
   # ------------------------------------------------------------- worker ----
   - type: worker
@@ -64,13 +63,13 @@ services:
     plan: free
     region: ohio
     startCommand: bash scripts/start_worker.sh
-    envVarGroups:
-      - er-common
     envVars:
+      - fromGroup: er-common
       - key: DATABASE_URL
         fromDatabase:
           name: er-database
           property: connectionString
+
 
   # -------------------------------------------------------------- beat -----
   - type: worker
@@ -81,13 +80,13 @@ services:
     plan: free
     region: ohio
     startCommand: bash scripts/start_beat.sh
-    envVarGroups:
-      - er-common
     envVars:
+      - fromGroup: er-common
       - key: DATABASE_URL
         fromDatabase:
           name: er-database
           property: connectionString
+
 
   # ------------------------------------------------------- keep-alive ------
   # Free-tier services sleep after ~15 min idle; this wakes the API every 10 min.
