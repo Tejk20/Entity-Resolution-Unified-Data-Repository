@@ -54,7 +54,7 @@ services:
 
 
   # ------------------------------------------------------------- worker ----
-  - type: worker
+  - type: web
     name: er-worker
     runtime: docker
     rootDir: backend
@@ -72,7 +72,7 @@ services:
 
 
   # -------------------------------------------------------------- beat -----
-  - type: worker
+  - type: web
     name: er-beat
     runtime: docker
     rootDir: backend
