@@ -39,6 +39,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: er_api
+    # Local dev keeps the split topology (api / worker / beat as separate
+    # containers). The image default (scripts/start.sh) is the consolidated
+    # all-in-one entrypoint used by Render, so pin this service to API-only.
+    command: ["bash", "scripts/start_api.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-er}:${POSTGRES_PASSWORD:-er_password}@postgres:5432/${POSTGRES_DB:-entity_resolution}
       REDIS_URL: redis://redis:6379/0

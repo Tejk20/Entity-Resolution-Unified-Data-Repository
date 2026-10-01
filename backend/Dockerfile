@@ -19,5 +19,5 @@ RUN mkdir -p /data/uploads
 
 EXPOSE 8000
 
-ENV APP_ROLE=api
-CMD ["bash", "-c", "bash scripts/start_${APP_ROLE}.sh"]
+# Single all-in-one process: migrations + celery worker + celery beat + uvicorn.
+CMD ["bash", "scripts/start.sh"]

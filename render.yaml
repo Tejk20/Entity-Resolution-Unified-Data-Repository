@@ -1,7 +1,12 @@
 # render.yaml — Render Blueprint (free tier)
-# Auto-creates: PostgreSQL, API web service, Celery worker, Celery beat,
-# and a keep-alive cron that pings /health every 10 min so the API never sleeps.
-
+# Auto-creates a single PostgreSQL instance and ONE web service that runs the
+# FastAPI app, the Celery worker and the Celery beat scheduler as background
+# processes inside the same container (see backend/scripts/start.sh).
+#
+# Why a single service: Render's free tier does not allow background workers as
+# a separate service type, and splitting the stack across containers breaks
+# local-filesystem assumptions (spool shards, uploads). One container keeps the
+# whole backend in one place.
 
 envVarGroups:
   - name: er-common
@@ -15,7 +20,7 @@ envVarGroups:
         value: rediss://default:CHANGE_ME@your-upstash-host.upstash.io:6379/2
       # Frontend origin(s). Set yours after creating the Vercel project.
       - key: CORS_ORIGINS
-        value: '["https://YOUR_VERCEL_APP.vercel.app","http://localhost:5173","http://127.0.0.1:5173"]'
+        value: '["https://YOUR_VERCEL_APP.vercel.app","http://localhost:5173"]'
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: LOG_LEVEL
@@ -24,8 +29,6 @@ envVarGroups:
         value: "false"
       - key: RUN_MIGRATIONS_ON_STARTUP
         value: "true"
-      - key: UPLOAD_DIR
-        value: /data/uploads
 
 
 databases:
@@ -34,7 +37,8 @@ databases:
 
 
 services:
-  # ---------------------------------------------------------------- API ----
+  # ------------------------------------------------------------- all-in-one --
+  # API + Celery worker + Celery beat.
   - type: web
     name: er-api
     runtime: docker
@@ -45,44 +49,6 @@ services:
     healthCheckPath: /health
     envVars:
       - fromGroup: er-common
-      - key: APP_ROLE
-        value: api
-      - key: DATABASE_URL
-        fromDatabase:
-          name: er-database
-          property: connectionString
-
-
-  # ------------------------------------------------------------- worker ----
-  - type: web
-    name: er-worker
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    plan: free
-    region: ohio
-    envVars:
-      - fromGroup: er-common
-      - key: APP_ROLE
-        value: worker
-      - key: DATABASE_URL
-        fromDatabase:
-          name: er-database
-          property: connectionString
-
-
-  # -------------------------------------------------------------- beat -----
-  - type: web
-    name: er-beat
-    runtime: docker
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
-    plan: free
-    region: ohio
-    envVars:
-      - fromGroup: er-common
-      - key: APP_ROLE
-        value: beat
       - key: DATABASE_URL
         fromDatabase:
           name: er-database
