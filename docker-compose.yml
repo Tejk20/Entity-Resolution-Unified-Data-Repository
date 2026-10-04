@@ -52,6 +52,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173","http://localhost:3000","http://localhost:8080"]'
       RUN_MIGRATIONS_ON_STARTUP: "true"
+      # Auth signing key. Without this the app falls back to the committed dev
+      # default, which lets anyone forge access tokens.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env}
     volumes:
       - uploads:/data/uploads
     ports:
@@ -120,7 +123,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        # Empty by default so the bundle talks to same-origin /api, which the
+        # nginx image below proxies to the api service.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     container_name: er_frontend
     ports:
       - "${FRONTEND_PORT:-5173}:80"

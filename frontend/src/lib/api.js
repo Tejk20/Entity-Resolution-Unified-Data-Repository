@@ -1,10 +1,10 @@
 import axios from "axios";
 
-const raw = import.meta.env.VITE_API_BASE_URL || "/api";
+// Empty/unset means same-origin: the dev proxy and the production nginx
+// container both forward /api/* to the backend. A full origin is used verbatim.
+const raw = (import.meta.env.VITE_API_BASE_URL || "").trim();
 
-// The dev proxy forwards /api/* to the backend; the production nginx container
-// proxies /api/ as well. When VITE_API_BASE_URL is a full origin we prefix it.
-const baseURL = raw.startsWith("http") ? `${raw}/api/v1` : `${raw}/api/v1`;
+const baseURL = `${raw}/api/v1`;
 
 //: absolute URL for plain fetch() based calls (used by the auth pages)
 export function apiUrl(path) {

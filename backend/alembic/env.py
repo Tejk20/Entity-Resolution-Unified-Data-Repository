@@ -40,6 +40,15 @@ def _do_run_migrations(connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    # ``app.main`` injects its long-lived async engine through
+    # ``config.attributes["connection"]`` so migrations reuse the app pool
+    # instead of opening a second one.
+    connectable = config.attributes.get("connection")
+    if connectable is not None:
+        async with connectable.connect() as connection:
+            await connection.run_sync(_do_run_migrations)
+        return
+
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

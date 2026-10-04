@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -79,7 +80,9 @@ async def _run_migrations() -> None:
     cfg.attributes["connection"] = migration_engine
 
     logger.info("applying database migrations")
-    command.upgrade(cfg, "head")
+    # ``command.upgrade`` is synchronous and ``env.py`` drives its own event
+    # loop, so it must not run on the loop uvicorn already has running.
+    await asyncio.to_thread(command.upgrade, cfg, "head")
     logger.info("migrations up to date")
 
 
