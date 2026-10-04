@@ -33,8 +33,6 @@ services:
     plan: free
     region: ohio
     healthCheckPath: /health
-    # Migrations run inside the container before uvicorn binds.
-    maxShutdownDelaySeconds: 60
     envVars:
       - key: DATABASE_URL
         fromDatabase:
