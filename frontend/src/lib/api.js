@@ -31,7 +31,10 @@ export async function postAuthJson(url, body) {
 
 export const api = axios.create({
   baseURL,
-  timeout: 60000,
+  // Render's free tier sleeps after 15 min idle and needs ~50s to wake, so a
+  // cold first request can sit idle well past a 60s budget before any work
+  // happens server-side.
+  timeout: 120000,
   headers: { Accept: "application/json" },
 });
 
