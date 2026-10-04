@@ -1,44 +1,30 @@
 # render.yaml — Render Blueprint (free tier)
-# Auto-creates a single PostgreSQL instance and ONE web service that runs the
-# FastAPI app, the Celery worker and the Celery beat scheduler as background
-# processes inside the same container (see backend/scripts/start.sh).
+# Creates three resources, all in the same region so they can talk over Render's
+# private network:
+#   er-kv       Key Value (Valkey/Redis)  -> Celery broker + result backend + cache
+#   er-database Postgres                  -> system of record
+#   er-api      web service               -> FastAPI + Celery worker + beat in one
+#                                           container (backend/scripts/start.sh)
 #
-# Why a single service: Render's free tier does not allow background workers as
-# a separate service type, and splitting the stack across containers breaks
-# local-filesystem assumptions (spool shards, uploads). One container keeps the
-# whole backend in one place.
-
-envVarGroups:
-  - name: er-common
-    envVars:
-      # Upstash Redis (free tier): Console -> REST DB -> connect -> RESP URL (rediss://...)
-      - key: REDIS_URL
-        value: rediss://default:CHANGE_ME@your-upstash-host.upstash.io:6379
-      - key: CELERY_BROKER_URL
-        value: rediss://default:CHANGE_ME@your-upstash-host.upstash.io:6379/1
-      - key: CELERY_RESULT_BACKEND
-        value: rediss://default:CHANGE_ME@your-upstash-host.upstash.io:6379/2
-      # Frontend origin(s). Set yours after creating the Vercel project.
-      - key: CORS_ORIGINS
-        value: '["https://YOUR_VERCEL_APP.vercel.app","http://localhost:5173"]'
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      - key: LOG_LEVEL
-        value: INFO
-      - key: AUTO_SEED_ON_STARTUP
-        value: "false"
-      - key: RUN_MIGRATIONS_ON_STARTUP
-        value: "true"
-
-
-databases:
-  - name: er-database
-    plan: free
-
+# Why one web service: the Free compute plan has no separate background-worker
+# service type, and splitting the stack across containers breaks the local
+# filesystem assumptions (spool shards, uploads). One container keeps the whole
+# backend in one place.
+#
+# Before the first sync, replace CORS_ORIGINS below with your Vercel origin.
 
 services:
-  # ------------------------------------------------------------- all-in-one --
-  # API + Celery worker + Celery beat.
+  # --------------------------------------------------- celery broker / cache --
+  - type: keyvalue
+    name: er-kv
+    region: ohio
+    plan: free
+    # Queue data must not be silently dropped when the 25 MB cap is hit.
+    maxmemoryPolicy: noeviction
+    # No public endpoint: only services in this workspace/region can reach it.
+    ipAllowList: []
+
+  # ------------------------------------------------------------------- api --
   - type: web
     name: er-api
     runtime: docker
@@ -47,9 +33,49 @@ services:
     plan: free
     region: ohio
     healthCheckPath: /health
+    # Migrations run inside the container before uvicorn binds.
+    maxShutdownDelaySeconds: 60
     envVars:
-      - fromGroup: er-common
       - key: DATABASE_URL
         fromDatabase:
           name: er-database
           property: connectionString
+      # All three Redis clients share db 0. Keyspaces do not collide: the app
+      # caches under `search:*`, the broker under the `er` exchange/queue keys,
+      # and results under `celery-task-meta-*` (expire after 24h). Splitting
+      # them across db 0/1/2 is not possible here because a Blueprint cannot
+      # append a database index to a referenced `connectionString`.
+      - key: REDIS_URL
+        fromService:
+          name: er-kv
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: er-kv
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: er-kv
+          type: keyvalue
+          property: connectionString
+      # Replace with your deployed Vercel origin, then push: the Blueprint
+      # re-syncs and Render restarts the service.
+      - key: CORS_ORIGINS
+        value: '["http://localhost:5173","http://localhost:8080"]'
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: LOG_LEVEL
+        value: INFO
+      # Seeding dispatches Celery tasks and would race migrations on boot.
+      - key: AUTO_SEED_ON_STARTUP
+        value: "false"
+      - key: RUN_MIGRATIONS_ON_STARTUP
+        value: "true"
+
+databases:
+  - name: er-database
+    plan: free
+    # Must match the web service region or the private-network lookup fails.
+    region: ohio

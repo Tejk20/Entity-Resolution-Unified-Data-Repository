@@ -13,7 +13,10 @@ from app.db.base import Base
 import app.db.models  # noqa: F401  (register metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Must be the asyncpg URL: env.py builds an AsyncEngine, and Render hands us a
+# plain ``postgresql://`` connection string. Reuse the app's normaliser so the
+# CLI path (``alembic upgrade head`` in scripts/start.sh) works too.
+config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
