@@ -93,18 +93,35 @@ tool — do not install it.
 
 ## Vercel (frontend)
 
-`vercel.json` sets the Vite framework preset, `dist` as the output directory and
-the SPA rewrite. The static build talks to Render directly, so:
+The Vercel project root is `frontend/` (that is where `vercel.json` lives), so
+Vercel only ever sees the Vite app and never tries to build the FastAPI service.
+`vercel.json` sets the Vite preset, `dist` as the output directory and the SPA
+rewrite. The static build talks to Render directly, so:
 
-1. `npm i -g vercel && cd frontend && vercel link`
+1. `cd frontend && npm i -g vercel && vercel link --project er-frontend`
 2. Set the API origin **before** building (VITE_ vars are inlined at build time):
    ```bash
-   vercel env add VITE_API_BASE_URL production   # -> https://er-api.onrender.com
+   vercel env add VITE_API_BASE_URL production --value https://er-api-69ca.onrender.com
    ```
-   or Project → Settings → Environment Variables.
-3. `vercel --prod` from the repo root (it honours `vercel.json`).
+3. `vercel deploy --prod`
 
 No trailing slash, no `/api/v1` suffix — the client appends `/api/v1` itself.
+
+If the site asks you to log in, the project still has Vercel Authentication
+enabled (the default for a brand-new project):
+
+```bash
+vercel project protection disable --sso     # make it public
+```
+
+## Live URLs
+
+| | |
+| --- | --- |
+| API (Render) | https://er-api-69ca.onrender.com |
+| UI (Vercel) | https://er-frontend-sigma.vercel.app |
+| Render service | `er-api` (native python, rootDir `backend`) |
+| Render datastores | `er-database` (Postgres 16/18, ohio), `er-kv` (Key Value, ohio) |
 
 ## Environment reference
 

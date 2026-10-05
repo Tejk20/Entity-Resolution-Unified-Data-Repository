@@ -1,14 +1,8 @@
 {
-  "rootDirectory": "frontend",
   "framework": "vite",
   "installCommand": "npm install --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
-  },
   "rewrites": [
     { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]

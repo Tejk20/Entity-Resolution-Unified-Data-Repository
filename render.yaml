@@ -80,10 +80,10 @@ services:
       # at two interpreters inside the 0.5 GB free-tier limit.
       - key: CELERY_POOL
         value: solo
-      # Replace with your deployed Vercel origin, then push: the Blueprint
-      # re-syncs and Render restarts the service.
+      # Origins allowed to call the API from a browser. Update this whenever the
+      # frontend moves (a Blueprint sync restarts the service with the value).
       - key: CORS_ORIGINS
-        value: '["https://YOUR-APP.vercel.app","http://localhost:5173","http://127.0.0.1:5173"]'
+        value: '["https://er-frontend-sigma.vercel.app","http://localhost:5173","http://127.0.0.1:5173","http://localhost:4173"]'
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: LOG_LEVEL
