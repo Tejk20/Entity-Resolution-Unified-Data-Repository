@@ -35,7 +35,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
-from sqlalchemy import and_, delete, func, or_, select, text, update
+from sqlalchemy import and_, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -576,15 +576,48 @@ class ClusterIndexer:
         await self._stamp_identifiers(record_ids)
         updated = await self._refresh_entity_rollups(list(root_to_entity.values()))
 
+        # ---- 7. prune entities that lost every member ---------------------
+        # Runs after the links are rewritten, so an entity that still has
+        # members is never a candidate. Deleting a source cascades its records
+        # and identifiers away, which can leave the entity itself behind.
+        pruned = await self._prune_empty_entities()
+
         await self.session.commit()
         return {
             "clusters": len(root_to_members),
             "entities_created": created,
             "entities_updated": updated,
+            "entities_pruned": pruned,
             "records_indexed": len(record_ids),
             "identifiers_indexed": len(rows),
             "duration_ms": int((time.perf_counter() - t0) * 1000),
         }
+
+    async def _prune_empty_entities(self) -> int:
+        """Delete master entities that have no members left, anywhere.
+
+        An entity is only removed when it has no ``entity_records`` *and* no
+        ``entity_identifiers`` pointing at it, so a partially built entity is
+        never dropped mid-import.
+        """
+        result = await self.session.execute(
+            delete(MasterEntity).where(
+                ~exists(
+                    select(EntityRecord.id).where(
+                        EntityRecord.master_entity_id == MasterEntity.id
+                    )
+                ),
+                ~exists(
+                    select(EntityIdentifier.id).where(
+                        EntityIdentifier.master_entity_id == MasterEntity.id
+                    )
+                ),
+            )
+        )
+        pruned = int(result.rowcount or 0)
+        if pruned:
+            logger.info("pruned %d stale master entities with no members", pruned)
+        return pruned
 
     # ------------------------------------------------------------------ #
     async def _stamp_identifiers(self, record_ids: Sequence[int]) -> None:
