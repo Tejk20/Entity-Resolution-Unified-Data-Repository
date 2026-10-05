@@ -13,7 +13,12 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+        # Later files win, so a .env in the current directory (how the dev
+        # server is usually launched) overrides the backend/.env default.
+        env_file=(str(BASE_DIR / ".env"), ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
     )
 
     PROJECT_NAME: str = "Entity Resolution & Unified Data Repository"
@@ -30,6 +35,11 @@ class Settings(BaseSettings):
 
     UPLOAD_DIR: str = str(BASE_DIR / "data" / "uploads")
     MAX_UPLOAD_BYTES: int = 2 * 1024 * 1024 * 1024  # 2 GB
+    # Managed Postgres on the free tiers caps concurrent connections (Render's
+    # free instance allows a handful), and the API + celery worker share one
+    # service here, so keep the pools small instead of starving the database.
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
 
     # --- ingestion ---------------------------------------------------------
     CHUNK_SIZE: int = Field(default=5000, ge=1000, le=10000)

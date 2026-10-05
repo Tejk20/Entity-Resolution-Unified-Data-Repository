@@ -26,7 +26,13 @@ async def lifespan(app: FastAPI):
     from app.services.cache import close_redis
 
     if settings.RUN_MIGRATIONS_ON_STARTUP:
-        await _run_migrations()
+        try:
+            await _run_migrations()
+        except Exception:  # noqa: BLE001
+            # Never fail the boot here: the process has to be listening so
+            # /health can report *why* it is unhappy (and Render can show it in
+            # the deploy log) instead of crash-looping on every restart.
+            logger.exception("migrations failed on startup")
 
     # idempotent fallback that guarantees every model (incl. new ones such as
     # ``User``) has a table even when no alembic revision exists yet.
@@ -174,8 +180,43 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 
     @app.get("/health", tags=["meta"])
-    async def health() -> dict[str, Any]:
-        return {"status": "ok", "version": settings.VERSION}
+    async def health() -> JSONResponse:
+        """Liveness plus dependency status.
+
+        Render polls this path, so it has to reflect reality: a 503 when the
+        database is unreachable is what makes a broken deploy visible instead of
+        silently serving 500s from every endpoint.
+        """
+        from sqlalchemy import text
+
+        from app.db.session import engine
+        from app.services.cache import get_redis
+
+        db_up = True
+        try:
+            # bounded: a dead database must not make the health probe hang
+            async with asyncio.timeout(3):
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("health: database unreachable: %s", exc)
+            db_up = False
+
+        broker_up = True
+        try:
+            # hard timeout: Render's health probe should never hang on this
+            await asyncio.wait_for(get_redis().ping(), timeout=2)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("health: redis/broker unreachable: %s", exc)
+            broker_up = False
+
+        payload: dict[str, Any] = {
+            "status": "ok" if db_up else "degraded",
+            "version": settings.VERSION,
+            "database": "up" if db_up else "down",
+            "broker": "up" if broker_up else "down",
+        }
+        return JSONResponse(payload, status_code=200 if db_up else 503)
 
     @app.get("/", tags=["meta"])
     async def root() -> dict[str, Any]:

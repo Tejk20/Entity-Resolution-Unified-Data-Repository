@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     settings.ASYNC_DATABASE_URL,
     echo=False,
-    pool_size=20,
-    max_overflow=30,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
     pool_pre_ping=True,
     pool_recycle=1800,
 )

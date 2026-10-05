@@ -1,8 +1,19 @@
 import axios from "axios";
 
-// Empty/unset means same-origin: the dev proxy and the production nginx
-// container both forward /api/* to the backend. A full origin is used verbatim.
+// Unset/empty means same-origin, which is what the Vite dev proxy uses. In a
+// deployment (Vercel static build + Render API) set VITE_API_BASE_URL to the
+// Render origin so the bundle talks to the backend directly instead of to
+// Vercel; a full origin is used verbatim.
 const raw = (import.meta.env.VITE_API_BASE_URL || "").trim();
+
+if (import.meta.env.PROD && !raw) {
+  console.warn(
+    "[entity-resolution] VITE_API_BASE_URL is not set, so API calls go to the " +
+      "same origin as the page. On Vercel this means every request will 404 " +
+      "unless a proxy rewrites /api. Set VITE_API_BASE_URL to the backend origin " +
+      "(e.g. https://er-api.onrender.com) in the project environment variables."
+  );
+}
 
 const baseURL = `${raw}/api/v1`;
 
